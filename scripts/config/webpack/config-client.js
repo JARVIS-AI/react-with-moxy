@@ -12,9 +12,9 @@ const { getEnvVariables, inlineEnvVariables } = require('./util/env');
 const DefinePlugin = require('webpack/lib/DefinePlugin');
 const ProvidePlugin = require('webpack/lib/ProvidePlugin');
 const HotModuleReplacementPlugin = require('webpack/lib/HotModuleReplacementPlugin');
-const SvgStorePlugin = require('external-svg-sprite-loader/lib/SvgStorePlugin');
+const SvgStorePlugin = require('external-svg-sprite-loader');
 const BannerPlugin = require('webpack/lib/BannerPlugin');
-const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CaseSensitivePathsPlugin = require('case-sensitive-paths-webpack-plugin');
 const IgnoreEmitPlugin = require('ignore-emit-webpack-plugin');
@@ -67,6 +67,7 @@ module.exports = ({ minify } = {}) => {
                 // This guarantees that there is no `regenerator-runtime` duplication in the build in case the versions differ
                 'babel-runtime/regenerator': require.resolve('regenerator-runtime'),
             },
+            symlinks: false,
         },
         node: {
             // Set any node modules here that should be ignored by client side code
@@ -147,7 +148,7 @@ module.exports = ({ minify } = {}) => {
                     exclude: [/\.inline\.svg$/, path.join(srcDir, 'shared/media/fonts')],
                     use: [
                         {
-                            loader: require.resolve('external-svg-sprite-loader'),
+                            loader: SvgStorePlugin.loader,
                             options: {
                                 name: isDev ? 'images/svg-sprite.svg' : 'images/svg-sprite.[hash:15].svg',
                                 // Force publicPath to be local because external SVGs doesn't work on CDNs
@@ -175,6 +176,7 @@ module.exports = ({ minify } = {}) => {
                             options: {
                                 plugins: [
                                     { removeTitle: true },
+                                    { removeViewBox: false },
                                     { removeDimensions: true },
                                     { cleanupIDs: false },
                                 ],
@@ -224,7 +226,7 @@ module.exports = ({ minify } = {}) => {
                 regeneratorRuntime: require.resolve('regenerator-runtime'),
             }),
             // Add support for environment variables under `process.env`
-            // Also replace `typeof window` so that code branch elimination is performed by uglify at build time
+            // Also replace `typeof window` so that code branch elimination is performed by terser at build time
             new DefinePlugin({
                 ...inlineEnvVariables(envVars, { includeProcessEnv: true }),
                 'typeof window': '"object"',
@@ -268,12 +270,12 @@ module.exports = ({ minify } = {}) => {
         optimization: {
             minimize: minify,
             minimizer: [
-                new UglifyJsPlugin({
+                new TerserPlugin({
                     sourceMap: true,
                     extractComments: true,
                     parallel: true,
                     cache: true,
-                    uglifyOptions: {
+                    terserOptions: {
                         mangle: true,
                         compress: {
                             warnings: false, // Mute warnings
